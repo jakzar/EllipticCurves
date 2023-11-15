@@ -1,0 +1,264 @@
+#Ellitic Curves lab1
+#Jakub Zaroda WCY21KC1S1
+#Implementation of adding and multiplying points on EllipticCurve
+ 
+#Class below represents point on an EC: y^2 = x^3 + a*x + b over a finite field with 'p' elements
+#Each point has its own coordinates (x,y,z)
+#A point with coordinates (0,1,0) represents the point at infinity
+#The method printPoint() prints point's coordinates
+#The method returnCurveParameters() returns parameters of EC
+class PointOnCurve:
+    def __init__(self, x, y, z, a, b, p):
+        F=GF(p)
+        self.a=a
+        self.b=b
+        self.p=p
+        self.x=F(x)
+        self.y=F(y)
+        self.z=F(z)
+ 
+    def printPoint(self):
+        print("(",self.x,":",self.y,":",self.z,")")
+    def returnCurveParameters(self):
+        return self.a, self.b, self.p
+ 
+    
+#Function addPoints(P,Q) performs point addition on an elliptic curve (EC). 
+#The function takes two points P and Q as input, where each point is represented with coordinates (x, y, z) on the EC
+#If the points P and Q belong to different curves (as determined by their curve parameters), a message is printed and no addition is performed
+#If both points P and Q are at the point at infinity (z=0), the result is the point at infinity (0, 1, 0) on the same EC
+#If one of the points (either P or Q) is at the point at infinity (z=0), the result is the other point
+#If both points P and Q are not at the point at infinity (z=1), the function performs point addition as follows:
+# - If P and Q have the same (x, y) coordinates, the function calculates the tangent line and finds the third point of intersection
+# - If P and Q are distinct points, the function calculates the slope of the line through P and Q and finds the third point of intersection
+#The result is a new point R on the same EC, and it is returned as the output of the function.
+def addPoints(P, Q):
+    if(P.returnCurveParameters()!=Q.returnCurveParameters()):
+        print("Points from diffrent curves")
+        return
+    if(P.z==1 and Q.z==1):
+        if(P.x==Q.x and P.y==-Q.y):
+            R=PointOnCurve(0,1,0,P.a,P.b,P.p)
+        else:
+            if(P.x==Q.x and P.y==Q.y):
+                lamb=(3*(P.x^2)+P.a)/(2*P.y)
+            else:
+                lamb=(Q.y-P.y)/(Q.x-P.x)
+            x3=lamb^2-P.x-Q.x
+            y3=lamb*(P.x-x3)-P.y
+            R=PointOnCurve(x3,y3,1,P.a,P.b,P.p)
+    elif(P.z==0 and Q.z==0):
+        R=PointOnCurve(0,1,0,P.a,P.b,P.p)
+    else:
+        if(P.z==1):
+            R=PointOnCurve(P.x,P.y,P.z,P.a,P.b,P.p)
+        else:
+            R=PointOnCurve(Q.x,Q.y,Q.z,P.a,P.b,P.p)
+    return R
+ 
+#Function montgomeryLadder(P, n) performs point multiplication
+#It takes a point P (represented by (x, y, z) coordinates on an elliptic curve), and a scalar n as input
+#It initializes two points, P0 and P1, with P0 set to the point at infinity (0, 1, 0) and P1 set to the input point P
+#The binary representation of the scalar n is obtained, and its length (number of bits) is stored in 'd'
+# The function then iterates through the binary representation of 'n' from the most significant bit to the least significant bit
+# For each bit:
+# - If the bit is 1, it performs point addition by adding 'P0' and 'P1' to it, and also doubles 'P1'
+# - If the bit is 0, it performs point addition by adding 'P1' and 'P0' to it, and also doubles 'P0'
+#After all iterations, the final result is in 'P0', which represents the scalar multiplication of 'P' by 'n' on the elliptic curve
+#The resulting point 'P0' is returned as the output of the function
+def montgomeryLadder(P, n):
+    P0=PointOnCurve(0,1,0,P.a,P.b,P.p)
+    P1=PointOnCurve(P.x,P.y,P.z,P.a,P.b,P.p)
+    n_bit=bin(n)[2:]
+    d=len(n_bit)
+    for i in range (d-1,-1,-1):
+        if(int(n_bit[d-1-i])==1):
+            P0=addPoints(P0,P1)
+            P1=addPoints(P1,P1)
+        else:
+            P1=addPoints(P0,P1)
+            P0=addPoints(P0,P0)
+    return P0
+ 
+ 
+#The testCurve(p, a, b, Gx, Gy, Gz, rG, t) function is used to test an elliptic curve and point multiplication using both a custom implementation and the SageMath library
+#It takes several parameters: the prime field 'p', curve coefficients 'a' and 'b', base point coordinates 'Gx', 'Gy', 'Gz', the order of the base point 'rG'
+#and the number of test iterations 't'.
+ 
+#What the function does:
+# Create a point 'G' using the given base point coordinates 'Gx', 'Gy', 'Gz', curve coefficients 'a' and 'b', and prime field 'p'
+# Create a SageMath elliptic curve 'E' and a point 'S' on that curve using the provided parameters
+# Print information about the curve and the base point
+# Initialize a score for tracking differences between custom and SageMath implementations
+ 
+# Perform 't' test iterations:
+#   - Generate a random scalar 'k' between 2 and 'rG-2'
+#   - Print the current iteration and 'k * G'
+#   - Calculate 'T' using the custom 'montgomeryLadder' function and print the result
+#   - Calculate 'L' using SageMath's point multiplication and print the result
+#   - Compare 'T' and 'L' to check for differences. Update the difference score if differences are found
+ 
+# Print a summary based on the difference score:
+#   - If 'differenceScore' is 0, no differences were found in all iterations
+#   - If 'differenceScore' is 1, differences were found in some iterations
+ 
+# Print a separator for clarity.
+# This function tests the custom implementation against the SageMath library to ensure the correctness of point multiplication on the given elliptic curve.
+def testCurve(p,a,b,Gx,Gy,Gz,rG,t):
+    #own implementation test
+    G=PointOnCurve(Gx,Gy,Gz,a,b,p)
+    #sage
+    F=GF(p)
+    a=F(a)
+    b=F(b)
+    E=EllipticCurve([a,b])
+    S=E(Gx,Gy)
+    print("Testing curve:",E)
+    print("Point G:", S)
+    differenceScore=0
+    for i in range(t):
+        k=randint(2,rG-2)
+        print("\nIteration ",i+1)
+        print(k,"* G")
+        print("Own implementation: ")
+        T=montgomeryLadder(G,k)
+        T.printPoint()
+        print("Sage implementation:")
+        L=k*S
+        print(L)
+        if(T.x==L[0] and T.y==L[1] and T.z==L[2]):
+            print("No differences")
+        else:
+            print("Differences")
+            differenceScore=1
+
+    print("\n\n\nSUMMARY")
+    if(differenceScore==0):
+        print("No differences were found in all iterations")
+    else:
+        print("Differences were found in some iterations")
+    print("#############################################################################################################")
+
+################################################
+#LAB2
+################################################
+ 
+ 
+def exEuclides(x,N):
+    if(x>=N):
+        print("x powinno byc mniejsze od N")
+        return 1
+    A=N
+    B=x
+    Ua=0
+    Ub=1
+    M=matrix([[A],[B]])
+    Q=matrix([[0,1],[1,5]])
+    U=matrix([[Ua],[Ub]])
+ 
+    while True:
+        q=floor(M[0,0]/M[1,0])
+        Q[1,1]=-q
+        M=Q*M
+        U=Q*U
+        if M[1,0]==0:
+            break
+ 
+    d=M[0,0]
+    u=U[0,0]
+    v=(d-x*u)/N
+    return u,v,d
+ 
+ 
+class Triplet:
+    def __init__(self, T,b,g):
+        self.T=T
+        self.b=b
+        self.g=g
+    def printTriplet(self):
+        print("T:")
+        self.T.printPoint()
+        print("b:",self.b)
+        print("g:",self.g)
+ 
+ 
+def fFunction(Q,k):
+    a=Integer(Q.x)
+    a=a%k
+    #print(a)
+    return(a)
+
+def findingCollision(p,a,b,Gx,Gy,Gz,rG,k): 
+    G=PointOnCurve(Gx,Gy,Gz,a,b,p)
+    n=rG
+    alfa=randint(2,n-2)
+    print("Alfa=",alfa)
+    Q=montgomeryLadder(G,alfa)
+    M=[]   
+    for i in range (0, k):
+        bi=randint(2,n-2)
+        gi=randint(2,n-2)
+        Ti=addPoints(montgomeryLadder(G,bi),montgomeryLadder(Q,gi))
+        record=Triplet(Ti,bi,gi)
+        M.append(record)
+    #for i in range (0,len(M)):
+        #M[i].printTriplet()
+
+    a0=randint(2,n-2)
+    b0=randint(2,n-2)
+    c0=a0
+    d0=b0
+    R0=addPoints(montgomeryLadder(G,a0),montgomeryLadder(Q,b0))
+    S0=R0
+    while True:
+        L1=fFunction(R0,k)
+        Tl=M[L1].T
+        bl=M[L1].b
+        gl=M[L1].g
+        R0=addPoints(R0,Tl)
+        a0=(a0+bl)%n
+        b0=(b0+gl)%n
+
+        L2=fFunction(S0,k)
+        Tl2=M[L2].T
+        bl2=M[L2].b
+        gl2=M[L2].g
+
+        S0=addPoints(S0,Tl2)
+        c0=(c0+bl2)%n
+        d0=(d0+gl2)%n
+        L3=fFunction(S0,k)
+        Tl3=M[L3].T
+        bl3=M[L3].b
+        gl3=M[L3].g
+        S0=addPoints(S0,Tl3)
+        c0=(c0+bl3)%n
+        d0=(d0+gl3)%n
+        #R0.printPoint()
+        #S0.printPoint()
+        if(R0.x==S0.x):
+            #print("git")
+            #if(R0.y==S0.y):
+            #    print("gitY")
+            #    A=c0-a0
+            #    B=b0-d0
+            #    Bodw,o,gcd=exEuclides(B,n)
+            #    if (gcd!=1):
+            #        continue
+            #    alfa=(A*Bodw)%n
+            #    print(alfa)
+            #    break;
+            if((Integer(R0.y)%n)==(-(Integer(S0.y)))%n):  
+                print("git-Y")
+                A=-c0-a0
+                B=b0+d0
+                Bodw,o,gcd=exEuclides(B,n)
+                if (gcd!=1):
+                    continue
+                alfa=(A*Bodw)%n
+                print(alfa)
+                break;
+            else:
+                continue
+
+findingCollision(1073741789,382183198,410736703,431583365,858920426,1,1073759053,10)    
